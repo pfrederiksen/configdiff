@@ -5,37 +5,42 @@
 package configdiff
 
 import (
+	"fmt"
+
+	"github.com/pfrederiksen/configdiff/diff"
+	"github.com/pfrederiksen/configdiff/parse"
 	"github.com/pfrederiksen/configdiff/tree"
 )
 
-// Options configures how diffs are computed.
-type Options struct {
-	// IgnorePaths specifies paths to ignore in the diff (JSONPath-like syntax with wildcards).
-	// Example: []string{"metadata.creationTimestamp", "status.*"}
-	IgnorePaths []string
+// Re-export types from diff package for convenience.
+type (
+	// Options configures how diffs are computed.
+	Options = diff.Options
 
-	// ArraySetKeys maps array paths to their key field names for set-based comparison.
-	// When specified, arrays are treated as sets keyed by the given field.
-	// Example: map[string]string{"spec.containers": "name"}
-	ArraySetKeys map[string]string
+	// Coercions defines rules for type coercion during comparison.
+	Coercions = diff.Coercions
 
-	// Coercions configures type coercion rules for comparison.
-	Coercions Coercions
+	// Change represents a single detected change.
+	Change = diff.Change
 
-	// StableOrder ensures deterministic, stable ordering in output.
-	StableOrder bool
-}
+	// ChangeType categorizes the kind of change.
+	ChangeType = diff.ChangeType
+)
 
-// Coercions defines rules for type coercion during comparison.
-type Coercions struct {
-	// NumericStrings allows comparing string numbers with numeric values.
-	// Example: "1" can equal 1
-	NumericStrings bool
+// Re-export change type constants.
+const (
+	// ChangeTypeAdd indicates a new value was added.
+	ChangeTypeAdd = diff.ChangeTypeAdd
 
-	// BoolStrings allows comparing string booleans with boolean values.
-	// Example: "true" can equal true
-	BoolStrings bool
-}
+	// ChangeTypeRemove indicates a value was removed.
+	ChangeTypeRemove = diff.ChangeTypeRemove
+
+	// ChangeTypeModify indicates a value was changed.
+	ChangeTypeModify = diff.ChangeTypeModify
+
+	// ChangeTypeMove indicates a value was moved (array reordering).
+	ChangeTypeMove = diff.ChangeTypeMove
+)
 
 // Result contains the output of a diff operation.
 type Result struct {
@@ -48,38 +53,6 @@ type Result struct {
 	// Report is the human-friendly pretty report.
 	Report string
 }
-
-// Change represents a single detected change.
-type Change struct {
-	// Type is the kind of change (add, remove, modify, move).
-	Type ChangeType
-
-	// Path is the location of the change in the tree.
-	Path string
-
-	// OldValue is the previous value (nil for additions).
-	OldValue *tree.Node
-
-	// NewValue is the new value (nil for removals).
-	NewValue *tree.Node
-}
-
-// ChangeType categorizes the kind of change.
-type ChangeType string
-
-const (
-	// ChangeTypeAdd indicates a new value was added.
-	ChangeTypeAdd ChangeType = "add"
-
-	// ChangeTypeRemove indicates a value was removed.
-	ChangeTypeRemove ChangeType = "remove"
-
-	// ChangeTypeModify indicates a value was changed.
-	ChangeTypeModify ChangeType = "modify"
-
-	// ChangeTypeMove indicates a value was moved (array reordering).
-	ChangeTypeMove ChangeType = "move"
-)
 
 // Patch represents a machine-readable set of operations.
 type Patch struct {
@@ -106,14 +79,37 @@ type Operation struct {
 //
 // Supported formats: "yaml", "json", "hcl"
 func DiffBytes(a []byte, aFormat string, b []byte, bFormat string, opts Options) (*Result, error) {
-	// TODO: implement
-	return nil, nil
+	// Parse format a
+	aTree, err := parse.Parse(a, parse.Format(aFormat))
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse format %s: %w", aFormat, err)
+	}
+
+	// Parse format b
+	bTree, err := parse.Parse(b, parse.Format(bFormat))
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse format %s: %w", bFormat, err)
+	}
+
+	return DiffTrees(aTree, bTree, opts)
 }
 
 // DiffTrees compares two normalized tree nodes and returns the diff result.
 func DiffTrees(a, b *tree.Node, opts Options) (*Result, error) {
-	// TODO: implement
-	return nil, nil
+	// Compute the diff
+	changes, err := diff.Diff(a, b, opts)
+	if err != nil {
+		return nil, fmt.Errorf("diff failed: %w", err)
+	}
+
+	// Build result
+	result := &Result{
+		Changes: changes,
+		Patch:   Patch{}, // TODO: implement patch generation
+		Report:  "",      // TODO: implement report generation
+	}
+
+	return result, nil
 }
 
 // DiffYAML is a convenience function for comparing two YAML byte slices.
