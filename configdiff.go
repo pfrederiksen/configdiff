@@ -72,7 +72,8 @@ func DiffBytes(a []byte, aFormat string, b []byte, bFormat string, opts Options)
 	}
 
 	// Parse format b
-	bTree, err := parse.Parse(b, parse.Format(bFormat))
+	var bTree *tree.Node
+	bTree, err = parse.Parse(b, parse.Format(bFormat))
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse format %s: %w", bFormat, err)
 	}
@@ -89,7 +90,8 @@ func DiffTrees(a, b *tree.Node, opts Options) (*Result, error) {
 	}
 
 	// Generate patch from changes
-	patchObj, err := patch.FromChanges(changes)
+	var patchObj *patch.Patch
+	patchObj, err = patch.FromChanges(changes)
 	if err != nil {
 		return nil, fmt.Errorf("patch generation failed: %w", err)
 	}
