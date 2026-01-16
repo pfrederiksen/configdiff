@@ -1,0 +1,6 @@
+Summary: +2 added (2 total)
+
+Changes:
+  + /wholeNumber = 42
+
+  + /decimal = 3.14159

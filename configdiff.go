@@ -10,6 +10,7 @@ import (
 	"github.com/pfrederiksen/configdiff/diff"
 	"github.com/pfrederiksen/configdiff/parse"
 	"github.com/pfrederiksen/configdiff/patch"
+	"github.com/pfrederiksen/configdiff/report"
 	"github.com/pfrederiksen/configdiff/tree"
 )
 
@@ -96,11 +97,14 @@ func DiffTrees(a, b *tree.Node, opts Options) (*Result, error) {
 		return nil, fmt.Errorf("patch generation failed: %w", err)
 	}
 
+	// Generate pretty report
+	reportText := report.GenerateDetailed(changes)
+
 	// Build result
 	result := &Result{
 		Changes: changes,
 		Patch:   patchObj,
-		Report:  "", // TODO: implement report generation
+		Report:  reportText,
 	}
 
 	return result, nil

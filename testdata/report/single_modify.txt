@@ -1,0 +1,4 @@
+Summary: ~1 modified (1 total)
+
+Changes:
+  ~ /key: "old" → "new"
