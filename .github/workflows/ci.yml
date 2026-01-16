@@ -105,3 +105,6 @@ jobs:
 
     - name: Build
       run: go build -v ./...
+
+    - name: Build CLI binary
+      run: go build -v -o configdiff ./cmd/configdiff

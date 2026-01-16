@@ -1,0 +1,4 @@
+name: myapp
+replicas: 3
+image: nginx:1.19
+env: staging
