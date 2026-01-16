@@ -29,6 +29,7 @@ issues:
         - errcheck
         - dupl
         - goconst
+        - govet
 
 run:
   timeout: 5m
