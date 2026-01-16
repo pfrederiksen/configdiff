@@ -1,3 +1,6 @@
+// Package cli provides command-line interface support for configdiff,
+// including input handling, output formatting, and option mapping between
+// CLI flags and library options.
 package cli
 
 import (
