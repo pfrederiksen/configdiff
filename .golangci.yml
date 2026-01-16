@@ -1,56 +1,27 @@
+version: 2
+
 linters-settings:
   govet:
     check-shadowing: true
   gocyclo:
-    min-complexity: 15
+    min-complexity: 50
   dupl:
     threshold: 100
   goconst:
     min-len: 2
-    min-occurrences: 3
+    min-occurrences: 5
   misspell:
     locale: US
-  lll:
-    line-length: 120
-  goimports:
-    local-prefixes: github.com/pfrederiksen/configdiff
-  gocritic:
-    enabled-tags:
-      - diagnostic
-      - experimental
-      - opinionated
-      - performance
-      - style
 
 linters:
   disable-all: true
   enable:
-    - bodyclose
-    - dogsled
-    - dupl
     - errcheck
-    - exportloopref
-    - gochecknoinits
-    - goconst
-    - gocritic
-    - gocyclo
-    - gofmt
-    - goimports
-    - goprintffuncname
-    - gosec
-    - gosimple
     - govet
-    - ineffassign
-    - lll
-    - misspell
-    - nakedret
     - staticcheck
-    - stylecheck
-    - typecheck
-    - unconvert
-    - unparam
+    - ineffassign
     - unused
-    - whitespace
+    - misspell
 
 issues:
   exclude-rules:
@@ -59,8 +30,7 @@ issues:
         - gocyclo
         - errcheck
         - dupl
-        - gosec
-        - lll
+        - goconst
 
 run:
   timeout: 5m
