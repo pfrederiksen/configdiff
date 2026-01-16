@@ -9,10 +9,11 @@ import (
 
 	"github.com/pfrederiksen/configdiff/diff"
 	"github.com/pfrederiksen/configdiff/parse"
+	"github.com/pfrederiksen/configdiff/patch"
 	"github.com/pfrederiksen/configdiff/tree"
 )
 
-// Re-export types from diff package for convenience.
+// Re-export types from diff and patch packages for convenience.
 type (
 	// Options configures how diffs are computed.
 	Options = diff.Options
@@ -25,6 +26,12 @@ type (
 
 	// ChangeType categorizes the kind of change.
 	ChangeType = diff.ChangeType
+
+	// Patch represents a machine-readable set of operations.
+	Patch = patch.Patch
+
+	// Operation is a single patch operation (JSON Patch-like).
+	Operation = patch.Operation
 )
 
 // Re-export change type constants.
@@ -48,31 +55,10 @@ type Result struct {
 	Changes []Change
 
 	// Patch is the machine-readable patch representation.
-	Patch Patch
+	Patch *Patch
 
 	// Report is the human-friendly pretty report.
 	Report string
-}
-
-// Patch represents a machine-readable set of operations.
-type Patch struct {
-	// Operations is the list of patch operations.
-	Operations []Operation
-}
-
-// Operation is a single patch operation (JSON Patch-like).
-type Operation struct {
-	// Op is the operation type (add, remove, replace, move).
-	Op string `json:"op"`
-
-	// Path is the target path for the operation.
-	Path string `json:"path"`
-
-	// Value is the value for add/replace operations.
-	Value interface{} `json:"value,omitempty"`
-
-	// From is the source path for move operations.
-	From string `json:"from,omitempty"`
 }
 
 // DiffBytes compares two configuration byte slices and returns the diff result.
@@ -102,11 +88,17 @@ func DiffTrees(a, b *tree.Node, opts Options) (*Result, error) {
 		return nil, fmt.Errorf("diff failed: %w", err)
 	}
 
+	// Generate patch from changes
+	patchObj, err := patch.FromChanges(changes)
+	if err != nil {
+		return nil, fmt.Errorf("patch generation failed: %w", err)
+	}
+
 	// Build result
 	result := &Result{
 		Changes: changes,
-		Patch:   Patch{}, // TODO: implement patch generation
-		Report:  "",      // TODO: implement report generation
+		Patch:   patchObj,
+		Report:  "", // TODO: implement report generation
 	}
 
 	return result, nil
