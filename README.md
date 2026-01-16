@@ -507,11 +507,88 @@ type Options struct {
 
 ## Use Cases
 
-- **GitOps Reviews**: Understand exactly what changed in infrastructure configs
-- **CI/CD Checks**: Validate configuration changes before deployment
-- **Drift Detection**: Compare actual vs desired state in deployed systems
-- **Configuration Management**: Track changes across environments
-- **Multi-Format Comparison**: Compare YAML and JSON representations of the same config
+### Kubernetes Deployment Reviews
+
+```bash
+# Compare deployed config vs source
+kubectl get deployment myapp -o yaml > deployed.yaml
+configdiff deploy/myapp.yaml deployed.yaml -i /metadata/generation -i /status/*
+
+# Review Helm chart changes
+helm template myapp ./chart --values prod.yaml > new.yaml
+configdiff current-prod.yaml new.yaml --array-key /spec/template/spec/containers=name
+```
+
+### GitOps Pull Request Validation
+
+```bash
+# In CI pipeline - fail if unexpected changes
+git show main:config/production.yaml > old.yaml
+configdiff old.yaml config/production.yaml \
+  -i /metadata/annotations/last-modified \
+  --exit-code || echo "Configuration changes detected"
+```
+
+### Infrastructure Drift Detection
+
+```bash
+# Compare actual vs desired state
+terraform show -json > actual.json
+configdiff desired-state.json actual.json \
+  -o compact \
+  --ignore /timestamps/* \
+  --ignore /metadata/id
+```
+
+### Configuration Management
+
+```bash
+# Compare configs across environments
+configdiff config/staging.yaml config/production.yaml \
+  --array-key /services=name \
+  --array-key /databases=host
+
+# Cross-format validation (YAML source, JSON API)
+curl -s https://api.example.com/config > api-config.json
+configdiff local-config.yaml api-config.json \
+  --numeric-strings \
+  --bool-strings
+```
+
+### CI/CD Integration
+
+```yaml
+# GitHub Actions example
+- name: Validate config changes
+  run: |
+    configdiff old-config.yaml new-config.yaml --exit-code
+  continue-on-error: false
+
+# Only specific paths allowed to change
+- name: Check for unexpected changes
+  run: |
+    if configdiff base.yaml new.yaml -i /version -i /timestamp --quiet --exit-code; then
+      echo "Only version and timestamp changed - OK"
+    else
+      echo "Unexpected changes detected - review required"
+      exit 1
+    fi
+```
+
+### Docker Compose Migration
+
+```bash
+# Compare v2 vs v3 compose files
+configdiff docker-compose-v2.yaml docker-compose-v3.yaml \
+  --array-key /services=name \
+  -o report
+```
+
+**Key Benefits:**
+- Semantic understanding of configuration structure
+- Filter out noise (timestamps, auto-generated fields)
+- CI-friendly exit codes for automation
+- Multiple output formats for different use cases
 
 ## Testing
 
