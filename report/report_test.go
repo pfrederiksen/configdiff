@@ -415,3 +415,235 @@ func findSubstring(s, substr string) bool {
 	}
 	return false
 }
+
+func TestGenerateStat(t *testing.T) {
+	tests := []struct {
+		name    string
+		changes []diff.Change
+		want    []string // substrings that should appear in output
+	}{
+		{
+			name:    "empty changes",
+			changes: []diff.Change{},
+			want:    []string{"No changes detected"},
+		},
+		{
+			name: "single modification",
+			changes: []diff.Change{
+				{
+					Type:     diff.ChangeTypeModify,
+					Path:     "/version",
+					OldValue: tree.NewString("1.0"),
+					NewValue: tree.NewString("2.0"),
+				},
+			},
+			want: []string{"/version", "1 paths changed", "1 modifications(~)"},
+		},
+		{
+			name: "multiple changes",
+			changes: []diff.Change{
+				{
+					Type:     diff.ChangeTypeAdd,
+					Path:     "/newKey",
+					NewValue: tree.NewString("value"),
+				},
+				{
+					Type:     diff.ChangeTypeRemove,
+					Path:     "/oldKey",
+					OldValue: tree.NewString("value"),
+				},
+				{
+					Type:     diff.ChangeTypeModify,
+					Path:     "/changedKey",
+					OldValue: tree.NewString("old"),
+					NewValue: tree.NewString("new"),
+				},
+			},
+			want: []string{
+				"/newKey",
+				"/oldKey",
+				"/changedKey",
+				"3 paths changed",
+				"1 additions(+)",
+				"1 deletions(-)",
+				"1 modifications(~)",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := GenerateStat(tt.changes)
+			for _, substr := range tt.want {
+				if !contains(got, substr) {
+					t.Errorf("GenerateStat() output missing %q\nGot:\n%s", substr, got)
+				}
+			}
+		})
+	}
+}
+
+func TestGenerateSideBySide(t *testing.T) {
+	tests := []struct {
+		name    string
+		changes []diff.Change
+		opts    Options
+		want    []string // substrings that should appear in output
+	}{
+		{
+			name:    "empty changes",
+			changes: []diff.Change{},
+			opts:    Options{NoColor: true},
+			want:    []string{"No changes detected"},
+		},
+		{
+			name: "addition",
+			changes: []diff.Change{
+				{
+					Type:     diff.ChangeTypeAdd,
+					Path:     "/newKey",
+					NewValue: tree.NewString("value"),
+				},
+			},
+			opts: Options{NoColor: true},
+			want: []string{
+				"Old Value",
+				"New Value",
+				"/newKey",
+				"(none)",
+				"value",
+			},
+		},
+		{
+			name: "removal",
+			changes: []diff.Change{
+				{
+					Type:     diff.ChangeTypeRemove,
+					Path:     "/oldKey",
+					OldValue: tree.NewString("value"),
+				},
+			},
+			opts: Options{NoColor: true},
+			want: []string{
+				"/oldKey",
+				"value",
+				"(removed)",
+			},
+		},
+		{
+			name: "modification",
+			changes: []diff.Change{
+				{
+					Type:     diff.ChangeTypeModify,
+					Path:     "/key",
+					OldValue: tree.NewString("old"),
+					NewValue: tree.NewString("new"),
+				},
+			},
+			opts: Options{NoColor: true},
+			want: []string{
+				"/key",
+				"old",
+				"new",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := GenerateSideBySide(tt.changes, tt.opts)
+			for _, substr := range tt.want {
+				if !contains(got, substr) {
+					t.Errorf("GenerateSideBySide() output missing %q\nGot:\n%s", substr, got)
+				}
+			}
+		})
+	}
+}
+
+func TestGenerateGitDiff(t *testing.T) {
+	tests := []struct {
+		name    string
+		changes []diff.Change
+		oldFile string
+		newFile string
+		want    []string // substrings that should appear in output
+	}{
+		{
+			name:    "empty changes",
+			changes: []diff.Change{},
+			oldFile: "old.yaml",
+			newFile: "new.yaml",
+			want:    []string{}, // empty diff returns empty string
+		},
+		{
+			name: "addition",
+			changes: []diff.Change{
+				{
+					Type:     diff.ChangeTypeAdd,
+					Path:     "/newKey",
+					NewValue: tree.NewString("value"),
+				},
+			},
+			oldFile: "old.yaml",
+			newFile: "new.yaml",
+			want: []string{
+				"diff --configdiff a/old.yaml b/new.yaml",
+				"--- a/old.yaml",
+				"+++ b/new.yaml",
+				"+/newKey: \"value\"",
+			},
+		},
+		{
+			name: "removal",
+			changes: []diff.Change{
+				{
+					Type:     diff.ChangeTypeRemove,
+					Path:     "/oldKey",
+					OldValue: tree.NewString("value"),
+				},
+			},
+			oldFile: "old.yaml",
+			newFile: "new.yaml",
+			want: []string{
+				"diff --configdiff",
+				"-/oldKey: \"value\"",
+			},
+		},
+		{
+			name: "modification",
+			changes: []diff.Change{
+				{
+					Type:     diff.ChangeTypeModify,
+					Path:     "/key",
+					OldValue: tree.NewString("old"),
+					NewValue: tree.NewString("new"),
+				},
+			},
+			oldFile: "old.yaml",
+			newFile: "new.yaml",
+			want: []string{
+				"diff --configdiff",
+				"-/key: \"old\"",
+				"+/key: \"new\"",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := GenerateGitDiff(tt.changes, tt.oldFile, tt.newFile)
+			if len(tt.want) == 0 {
+				if got != "" {
+					t.Errorf("GenerateGitDiff() = %q, want empty string", got)
+				}
+				return
+			}
+			for _, substr := range tt.want {
+				if !contains(got, substr) {
+					t.Errorf("GenerateGitDiff() output missing %q\nGot:\n%s", substr, got)
+				}
+			}
+		})
+	}
+}
