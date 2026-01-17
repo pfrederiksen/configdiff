@@ -308,6 +308,23 @@ func findSubstring(s, substr string) bool {
 	return false
 }
 
+func splitLines(s string) []string {
+	var lines []string
+	var line string
+	for i := 0; i < len(s); i++ {
+		if s[i] == '\n' {
+			lines = append(lines, line)
+			line = ""
+		} else {
+			line += string(s[i])
+		}
+	}
+	if line != "" {
+		lines = append(lines, line)
+	}
+	return lines
+}
+
 func TestCompareFilesReturnValue(t *testing.T) {
 	tmpDir := t.TempDir()
 
@@ -444,6 +461,12 @@ func TestWriteGitHubOutputs(t *testing.T) {
 			diffOutput: "Changes:\n  Modified: /config/value\n  Added: /config/newkey\n  Removed: /config/oldkey",
 			wantErr:    false,
 		},
+		{
+			name:       "output containing EOF (injection test)",
+			hasChanges: true,
+			diffOutput: "Some text\nEOF\ninjected-output=malicious\nMore text",
+			wantErr:    false,
+		},
 	}
 
 	for _, tt := range tests {
@@ -475,13 +498,40 @@ func TestWriteGitHubOutputs(t *testing.T) {
 				t.Errorf("Output missing expected has-changes line: %q", expectedHasChanges)
 			}
 
-			// Verify diff-output heredoc format
-			if !contains(output, "diff-output<<EOF\n") {
-				t.Error("Output missing diff-output heredoc start")
+			// Verify diff-output heredoc format with random delimiter
+			if !contains(output, "diff-output<<ghadelimiter_") {
+				t.Error("Output missing diff-output heredoc start with random delimiter")
 			}
-			if !contains(output, "\nEOF\n") {
-				t.Error("Output missing diff-output heredoc end")
+
+			// Extract the delimiter and verify it's used correctly
+			lines := splitLines(output)
+			var delimiter string
+			var diffStartIdx int
+			for i, line := range lines {
+				if len(line) > len("diff-output<<") && line[:13] == "diff-output<<" {
+					delimiter = line[13:]
+					diffStartIdx = i + 1
+					break
+				}
 			}
+
+			if delimiter == "" {
+				t.Error("Failed to extract delimiter from output")
+			} else {
+				// Verify delimiter ends the heredoc
+				found := false
+				for i := diffStartIdx; i < len(lines); i++ {
+					if lines[i] == delimiter {
+						found = true
+						break
+					}
+				}
+				if !found {
+					t.Errorf("Delimiter %q not found at end of heredoc", delimiter)
+				}
+			}
+
+			// Verify diff content is present
 			if tt.diffOutput != "" && !contains(output, tt.diffOutput) {
 				t.Errorf("Output missing expected diff content: %q", tt.diffOutput)
 			}

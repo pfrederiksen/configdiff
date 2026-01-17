@@ -1,6 +1,8 @@
 package main
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -279,8 +281,16 @@ func writeGitHubOutputs(outputFile string, hasChanges bool, diffOutput string) e
 		return err
 	}
 
-	// Write diff-output using heredoc format
-	if _, err := fmt.Fprintf(f, "diff-output<<EOF\n%s\nEOF\n", diffOutput); err != nil {
+	// Generate random delimiter to prevent injection attacks
+	// See: https://docs.github.com/en/actions/writing-workflows/choosing-what-your-workflow-does/workflow-commands-for-github-actions#multiline-strings
+	delimiterBytes := make([]byte, 16)
+	if _, err := rand.Read(delimiterBytes); err != nil {
+		return fmt.Errorf("failed to generate random delimiter: %w", err)
+	}
+	delimiter := "ghadelimiter_" + hex.EncodeToString(delimiterBytes)
+
+	// Write diff-output using heredoc format with random delimiter
+	if _, err := fmt.Fprintf(f, "diff-output<<%s\n%s\n%s\n", delimiter, diffOutput, delimiter); err != nil {
 		return err
 	}
 
