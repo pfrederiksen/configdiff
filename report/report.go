@@ -46,6 +46,10 @@ func Generate(changes []diff.Change, opts Options) string {
 		return "No changes detected.\n"
 	}
 
+	// Save original color.NoColor value to restore later
+	originalNoColor := color.NoColor
+	defer func() { color.NoColor = originalNoColor }()
+
 	// Disable color if requested or if NO_COLOR env var is set
 	if opts.NoColor || os.Getenv("NO_COLOR") != "" {
 		color.NoColor = true

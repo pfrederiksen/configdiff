@@ -122,7 +122,7 @@ func (c *CLIOptions) ApplyConfigDefaults(cfg *config.Config) {
 	}
 
 	// Apply string defaults if not set
-	if c.OutputFormat == "report" && cfg.OutputFormat != "" {
+	if (c.OutputFormat == "" || c.OutputFormat == "report") && cfg.OutputFormat != "" {
 		c.OutputFormat = cfg.OutputFormat
 	}
 
