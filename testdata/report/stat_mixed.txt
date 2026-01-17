@@ -1,0 +1,6 @@
+ /config/another | ++++++++++++++++++++++++++++++++++++++++
+ /config/new     | ++++++++++++++++++++++++++++++++++++++++
+ /old/setting    | ----------------------------------------
+ /position       | 
+ /replicas       | ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ 5 paths changed, 2 additions(+), 1 deletions(-), 1 modifications(~), 1 moves(→)

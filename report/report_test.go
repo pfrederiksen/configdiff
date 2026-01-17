@@ -420,12 +420,12 @@ func TestGenerateStat(t *testing.T) {
 	tests := []struct {
 		name    string
 		changes []diff.Change
-		want    []string // substrings that should appear in output
+		golden  string
 	}{
 		{
 			name:    "empty changes",
 			changes: []diff.Change{},
-			want:    []string{"No changes detected"},
+			golden:  "stat_empty.txt",
 		},
 		{
 			name: "single modification",
@@ -437,7 +437,7 @@ func TestGenerateStat(t *testing.T) {
 					NewValue: tree.NewString("2.0"),
 				},
 			},
-			want: []string{"/version", "1 paths changed", "1 modifications(~)"},
+			golden: "stat_single_modify.txt",
 		},
 		{
 			name: "multiple changes",
@@ -459,25 +459,68 @@ func TestGenerateStat(t *testing.T) {
 					NewValue: tree.NewString("new"),
 				},
 			},
-			want: []string{
-				"/newKey",
-				"/oldKey",
-				"/changedKey",
-				"3 paths changed",
-				"1 additions(+)",
-				"1 deletions(-)",
-				"1 modifications(~)",
+			golden: "stat_multiple.txt",
+		},
+		{
+			name: "mixed changes",
+			changes: []diff.Change{
+				{
+					Type:     diff.ChangeTypeAdd,
+					Path:     "/config/new",
+					NewValue: tree.NewString("value"),
+				},
+				{
+					Type:     diff.ChangeTypeAdd,
+					Path:     "/config/another",
+					NewValue: tree.NewNumber(42),
+				},
+				{
+					Type:     diff.ChangeTypeRemove,
+					Path:     "/old/setting",
+					OldValue: tree.NewBool(true),
+				},
+				{
+					Type:     diff.ChangeTypeModify,
+					Path:     "/replicas",
+					OldValue: tree.NewNumber(2),
+					NewValue: tree.NewNumber(5),
+				},
+				{
+					Type:     diff.ChangeTypeMove,
+					Path:     "/position",
+					OldValue: tree.NewNumber(0),
+					NewValue: tree.NewNumber(1),
+				},
 			},
+			golden: "stat_mixed.txt",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := GenerateStat(tt.changes)
-			for _, substr := range tt.want {
-				if !contains(got, substr) {
-					t.Errorf("GenerateStat() output missing %q\nGot:\n%s", substr, got)
+
+			goldenPath := filepath.Join("..", "testdata", "report", tt.golden)
+
+			if *updateGolden {
+				// Update golden file
+				if err := os.MkdirAll(filepath.Dir(goldenPath), 0755); err != nil {
+					t.Fatalf("Failed to create directory: %v", err)
 				}
+				if err := os.WriteFile(goldenPath, []byte(got), 0644); err != nil {
+					t.Fatalf("Failed to update golden file: %v", err)
+				}
+			}
+
+			// Read golden file
+			want, err := os.ReadFile(goldenPath)
+			if err != nil {
+				t.Fatalf("Failed to read golden file %s: %v (run with -update to create)", goldenPath, err)
+			}
+
+			if got != string(want) {
+				t.Errorf("GenerateStat() output differs from golden file %s\nGot:\n%s\nWant:\n%s", tt.golden, got, string(want))
+				t.Logf("Run with -update flag to update golden files")
 			}
 		})
 	}
@@ -488,16 +531,16 @@ func TestGenerateSideBySide(t *testing.T) {
 		name    string
 		changes []diff.Change
 		opts    Options
-		want    []string // substrings that should appear in output
+		golden  string
 	}{
 		{
 			name:    "empty changes",
 			changes: []diff.Change{},
 			opts:    Options{NoColor: true},
-			want:    []string{"No changes detected"},
+			golden:  "side_by_side_empty.txt",
 		},
 		{
-			name: "addition",
+			name: "single addition",
 			changes: []diff.Change{
 				{
 					Type:     diff.ChangeTypeAdd,
@@ -505,17 +548,11 @@ func TestGenerateSideBySide(t *testing.T) {
 					NewValue: tree.NewString("value"),
 				},
 			},
-			opts: Options{NoColor: true},
-			want: []string{
-				"Old Value",
-				"New Value",
-				"/newKey",
-				"(none)",
-				"value",
-			},
+			opts:   Options{NoColor: true},
+			golden: "side_by_side_add.txt",
 		},
 		{
-			name: "removal",
+			name: "single removal",
 			changes: []diff.Change{
 				{
 					Type:     diff.ChangeTypeRemove,
@@ -523,12 +560,8 @@ func TestGenerateSideBySide(t *testing.T) {
 					OldValue: tree.NewString("value"),
 				},
 			},
-			opts: Options{NoColor: true},
-			want: []string{
-				"/oldKey",
-				"value",
-				"(removed)",
-			},
+			opts:   Options{NoColor: true},
+			golden: "side_by_side_remove.txt",
 		},
 		{
 			name: "modification",
@@ -540,22 +573,59 @@ func TestGenerateSideBySide(t *testing.T) {
 					NewValue: tree.NewString("new"),
 				},
 			},
-			opts: Options{NoColor: true},
-			want: []string{
-				"/key",
-				"old",
-				"new",
+			opts:   Options{NoColor: true},
+			golden: "side_by_side_modify.txt",
+		},
+		{
+			name: "multiple changes",
+			changes: []diff.Change{
+				{
+					Type:     diff.ChangeTypeAdd,
+					Path:     "/env",
+					NewValue: tree.NewString("production"),
+				},
+				{
+					Type:     diff.ChangeTypeRemove,
+					Path:     "/debug",
+					OldValue: tree.NewBool(true),
+				},
+				{
+					Type:     diff.ChangeTypeModify,
+					Path:     "/replicas",
+					OldValue: tree.NewNumber(2),
+					NewValue: tree.NewNumber(5),
+				},
 			},
+			opts:   Options{NoColor: true},
+			golden: "side_by_side_multiple.txt",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := GenerateSideBySide(tt.changes, tt.opts)
-			for _, substr := range tt.want {
-				if !contains(got, substr) {
-					t.Errorf("GenerateSideBySide() output missing %q\nGot:\n%s", substr, got)
+
+			goldenPath := filepath.Join("..", "testdata", "report", tt.golden)
+
+			if *updateGolden {
+				// Update golden file
+				if err := os.MkdirAll(filepath.Dir(goldenPath), 0755); err != nil {
+					t.Fatalf("Failed to create directory: %v", err)
 				}
+				if err := os.WriteFile(goldenPath, []byte(got), 0644); err != nil {
+					t.Fatalf("Failed to update golden file: %v", err)
+				}
+			}
+
+			// Read golden file
+			want, err := os.ReadFile(goldenPath)
+			if err != nil {
+				t.Fatalf("Failed to read golden file %s: %v (run with -update to create)", goldenPath, err)
+			}
+
+			if got != string(want) {
+				t.Errorf("GenerateSideBySide() output differs from golden file %s\nGot:\n%s\nWant:\n%s", tt.golden, got, string(want))
+				t.Logf("Run with -update flag to update golden files")
 			}
 		})
 	}
@@ -567,17 +637,17 @@ func TestGenerateGitDiff(t *testing.T) {
 		changes []diff.Change
 		oldFile string
 		newFile string
-		want    []string // substrings that should appear in output
+		golden  string
 	}{
 		{
 			name:    "empty changes",
 			changes: []diff.Change{},
 			oldFile: "old.yaml",
 			newFile: "new.yaml",
-			want:    []string{}, // empty diff returns empty string
+			golden:  "git_diff_empty.txt",
 		},
 		{
-			name: "addition",
+			name: "single addition",
 			changes: []diff.Change{
 				{
 					Type:     diff.ChangeTypeAdd,
@@ -587,15 +657,10 @@ func TestGenerateGitDiff(t *testing.T) {
 			},
 			oldFile: "old.yaml",
 			newFile: "new.yaml",
-			want: []string{
-				"diff --configdiff a/old.yaml b/new.yaml",
-				"--- a/old.yaml",
-				"+++ b/new.yaml",
-				"+/newKey: \"value\"",
-			},
+			golden:  "git_diff_add.txt",
 		},
 		{
-			name: "removal",
+			name: "single removal",
 			changes: []diff.Change{
 				{
 					Type:     diff.ChangeTypeRemove,
@@ -605,10 +670,7 @@ func TestGenerateGitDiff(t *testing.T) {
 			},
 			oldFile: "old.yaml",
 			newFile: "new.yaml",
-			want: []string{
-				"diff --configdiff",
-				"-/oldKey: \"value\"",
-			},
+			golden:  "git_diff_remove.txt",
 		},
 		{
 			name: "modification",
@@ -622,27 +684,59 @@ func TestGenerateGitDiff(t *testing.T) {
 			},
 			oldFile: "old.yaml",
 			newFile: "new.yaml",
-			want: []string{
-				"diff --configdiff",
-				"-/key: \"old\"",
-				"+/key: \"new\"",
+			golden:  "git_diff_modify.txt",
+		},
+		{
+			name: "multiple changes",
+			changes: []diff.Change{
+				{
+					Type:     diff.ChangeTypeAdd,
+					Path:     "/env",
+					NewValue: tree.NewString("production"),
+				},
+				{
+					Type:     diff.ChangeTypeRemove,
+					Path:     "/debug",
+					OldValue: tree.NewBool(true),
+				},
+				{
+					Type:     diff.ChangeTypeModify,
+					Path:     "/replicas",
+					OldValue: tree.NewNumber(2),
+					NewValue: tree.NewNumber(5),
+				},
 			},
+			oldFile: "config.yaml",
+			newFile: "config.yaml",
+			golden:  "git_diff_multiple.txt",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := GenerateGitDiff(tt.changes, tt.oldFile, tt.newFile)
-			if len(tt.want) == 0 {
-				if got != "" {
-					t.Errorf("GenerateGitDiff() = %q, want empty string", got)
+
+			goldenPath := filepath.Join("..", "testdata", "report", tt.golden)
+
+			if *updateGolden {
+				// Update golden file
+				if err := os.MkdirAll(filepath.Dir(goldenPath), 0755); err != nil {
+					t.Fatalf("Failed to create directory: %v", err)
 				}
-				return
+				if err := os.WriteFile(goldenPath, []byte(got), 0644); err != nil {
+					t.Fatalf("Failed to update golden file: %v", err)
+				}
 			}
-			for _, substr := range tt.want {
-				if !contains(got, substr) {
-					t.Errorf("GenerateGitDiff() output missing %q\nGot:\n%s", substr, got)
-				}
+
+			// Read golden file
+			want, err := os.ReadFile(goldenPath)
+			if err != nil {
+				t.Fatalf("Failed to read golden file %s: %v (run with -update to create)", goldenPath, err)
+			}
+
+			if got != string(want) {
+				t.Errorf("GenerateGitDiff() output differs from golden file %s\nGot:\n%s\nWant:\n%s", tt.golden, got, string(want))
+				t.Logf("Run with -update flag to update golden files")
 			}
 		})
 	}

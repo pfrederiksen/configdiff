@@ -1,0 +1,10 @@
+diff --configdiff a/config.yaml b/config.yaml
+--- a/config.yaml
++++ b/config.yaml
+@@ /env @@
++/env: "production"
+@@ /debug @@
+-/debug: true
+@@ /replicas @@
+-/replicas: 2
++/replicas: 5

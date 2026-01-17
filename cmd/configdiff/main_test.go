@@ -415,3 +415,111 @@ func TestDirectoryComparisonDoesNotExitEarly(t *testing.T) {
 	// If we get here, the function completed successfully without os.Exit
 	// The os.Exit would happen in the caller (compare function), not in compareDirectories
 }
+
+func TestWriteGitHubOutputs(t *testing.T) {
+	tmpDir := t.TempDir()
+	outputFile := filepath.Join(tmpDir, "github_output.txt")
+
+	tests := []struct {
+		name       string
+		hasChanges bool
+		diffOutput string
+		wantErr    bool
+	}{
+		{
+			name:       "with changes",
+			hasChanges: true,
+			diffOutput: "path: /config/value\nold: 1\nnew: 2",
+			wantErr:    false,
+		},
+		{
+			name:       "no changes",
+			hasChanges: false,
+			diffOutput: "",
+			wantErr:    false,
+		},
+		{
+			name:       "multiline output",
+			hasChanges: true,
+			diffOutput: "Changes:\n  Modified: /config/value\n  Added: /config/newkey\n  Removed: /config/oldkey",
+			wantErr:    false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Remove output file between tests
+			os.Remove(outputFile)
+
+			err := writeGitHubOutputs(outputFile, tt.hasChanges, tt.diffOutput)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("writeGitHubOutputs() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+
+			if tt.wantErr {
+				return
+			}
+
+			// Read the output file
+			content, err := os.ReadFile(outputFile)
+			if err != nil {
+				t.Fatalf("Failed to read output file: %v", err)
+			}
+
+			output := string(content)
+
+			// Verify has-changes output
+			expectedHasChanges := fmt.Sprintf("has-changes=%v\n", tt.hasChanges)
+			if !contains(output, expectedHasChanges) {
+				t.Errorf("Output missing expected has-changes line: %q", expectedHasChanges)
+			}
+
+			// Verify diff-output heredoc format
+			if !contains(output, "diff-output<<EOF\n") {
+				t.Error("Output missing diff-output heredoc start")
+			}
+			if !contains(output, "\nEOF\n") {
+				t.Error("Output missing diff-output heredoc end")
+			}
+			if tt.diffOutput != "" && !contains(output, tt.diffOutput) {
+				t.Errorf("Output missing expected diff content: %q", tt.diffOutput)
+			}
+		})
+	}
+}
+
+func TestWriteGitHubOutputsAppend(t *testing.T) {
+	tmpDir := t.TempDir()
+	outputFile := filepath.Join(tmpDir, "github_output.txt")
+
+	// Write initial content
+	initialContent := "existing-output=test\n"
+	if err := os.WriteFile(outputFile, []byte(initialContent), 0644); err != nil {
+		t.Fatalf("Failed to write initial content: %v", err)
+	}
+
+	// Append GitHub outputs
+	err := writeGitHubOutputs(outputFile, true, "diff content")
+	if err != nil {
+		t.Fatalf("writeGitHubOutputs() error = %v", err)
+	}
+
+	// Read file
+	content, err := os.ReadFile(outputFile)
+	if err != nil {
+		t.Fatalf("Failed to read output file: %v", err)
+	}
+
+	output := string(content)
+
+	// Verify initial content is preserved
+	if !contains(output, initialContent) {
+		t.Error("Initial content was not preserved")
+	}
+
+	// Verify new content was appended
+	if !contains(output, "has-changes=true") {
+		t.Error("New content was not appended")
+	}
+}

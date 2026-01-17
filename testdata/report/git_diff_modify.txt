@@ -1,0 +1,6 @@
+diff --configdiff a/old.yaml b/new.yaml
+--- a/old.yaml
++++ b/new.yaml
+@@ /key @@
+-/key: "old"
++/key: "new"

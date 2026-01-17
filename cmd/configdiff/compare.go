@@ -117,8 +117,9 @@ func compareFiles(oldFile, newFile string) (bool, error) {
 	}
 
 	// Format and output results (unless quiet mode)
+	var output string
 	if !quiet {
-		output, err := cli.FormatOutput(result, cli.OutputOptions{
+		output, err = cli.FormatOutput(result, cli.OutputOptions{
 			Format:         outputFormat,
 			NoColor:        noColor,
 			MaxValueLength: maxValueLength,
@@ -132,8 +133,17 @@ func compareFiles(oldFile, newFile string) (bool, error) {
 		fmt.Println(output)
 	}
 
+	// Write GitHub Actions outputs if in GHA environment
+	hasChanges := cli.HasChanges(result)
+	if githubOutput := os.Getenv("GITHUB_OUTPUT"); githubOutput != "" {
+		if err := writeGitHubOutputs(githubOutput, hasChanges, output); err != nil {
+			// Log error but don't fail the command
+			fmt.Fprintf(os.Stderr, "Warning: Failed to write GitHub Actions outputs: %v\n", err)
+		}
+	}
+
 	// Return whether changes were found
-	return cli.HasChanges(result), nil
+	return hasChanges, nil
 }
 
 // compareDirectories recursively compares two directories.
@@ -254,4 +264,25 @@ func fileExists(path string) bool {
 		return false
 	}
 	return !info.IsDir()
+}
+
+// writeGitHubOutputs writes GitHub Actions outputs to the GITHUB_OUTPUT file
+func writeGitHubOutputs(outputFile string, hasChanges bool, diffOutput string) error {
+	f, err := os.OpenFile(outputFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	// Write has-changes output
+	if _, err := fmt.Fprintf(f, "has-changes=%v\n", hasChanges); err != nil {
+		return err
+	}
+
+	// Write diff-output using heredoc format
+	if _, err := fmt.Fprintf(f, "diff-output<<EOF\n%s\nEOF\n", diffOutput); err != nil {
+		return err
+	}
+
+	return nil
 }
