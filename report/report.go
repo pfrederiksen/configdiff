@@ -3,8 +3,10 @@ package report
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
+	"github.com/fatih/color"
 	"github.com/pfrederiksen/configdiff/diff"
 	"github.com/pfrederiksen/configdiff/tree"
 )
@@ -23,6 +25,9 @@ type Options struct {
 
 	// ContextLines shows N lines of context around changes (not implemented yet).
 	ContextLines int
+
+	// NoColor disables colored output.
+	NoColor bool
 }
 
 // DefaultOptions returns sensible defaults for report generation.
@@ -41,11 +46,16 @@ func Generate(changes []diff.Change, opts Options) string {
 		return "No changes detected.\n"
 	}
 
+	// Disable color if requested or if NO_COLOR env var is set
+	if opts.NoColor || os.Getenv("NO_COLOR") != "" {
+		color.NoColor = true
+	}
+
 	var b strings.Builder
 
 	// Write summary
 	summary := summarizeChanges(changes)
-	b.WriteString(formatSummary(summary))
+	b.WriteString(formatSummary(summary, opts))
 
 	if !opts.Compact {
 		b.WriteString("\n")
@@ -94,20 +104,25 @@ func summarizeChanges(changes []diff.Change) Summary {
 }
 
 // formatSummary creates a summary header.
-func formatSummary(s Summary) string {
+func formatSummary(s Summary, opts Options) string {
 	parts := make([]string, 0, 4)
 
+	green := color.New(color.FgGreen).SprintFunc()
+	red := color.New(color.FgRed).SprintFunc()
+	yellow := color.New(color.FgYellow).SprintFunc()
+	cyan := color.New(color.FgCyan).SprintFunc()
+
 	if s.Added > 0 {
-		parts = append(parts, fmt.Sprintf("+%d added", s.Added))
+		parts = append(parts, green(fmt.Sprintf("+%d added", s.Added)))
 	}
 	if s.Removed > 0 {
-		parts = append(parts, fmt.Sprintf("-%d removed", s.Removed))
+		parts = append(parts, red(fmt.Sprintf("-%d removed", s.Removed)))
 	}
 	if s.Modified > 0 {
-		parts = append(parts, fmt.Sprintf("~%d modified", s.Modified))
+		parts = append(parts, yellow(fmt.Sprintf("~%d modified", s.Modified)))
 	}
 	if s.Moved > 0 {
-		parts = append(parts, fmt.Sprintf("↔%d moved", s.Moved))
+		parts = append(parts, cyan(fmt.Sprintf("↔%d moved", s.Moved)))
 	}
 
 	summary := strings.Join(parts, ", ")
@@ -118,25 +133,45 @@ func formatSummary(s Summary) string {
 func formatChange(change diff.Change, opts Options) string {
 	var b strings.Builder
 
-	// Change type symbol and path
+	// Color functions
+	green := color.New(color.FgGreen).SprintFunc()
+	red := color.New(color.FgRed).SprintFunc()
+	yellow := color.New(color.FgYellow).SprintFunc()
+	cyan := color.New(color.FgCyan).SprintFunc()
+
+	// Change type symbol and path with color
 	symbol := getChangeSymbol(change.Type)
-	b.WriteString(fmt.Sprintf("  %s %s", symbol, change.Path))
+	var coloredSymbol string
+	switch change.Type {
+	case diff.ChangeTypeAdd:
+		coloredSymbol = green(symbol)
+	case diff.ChangeTypeRemove:
+		coloredSymbol = red(symbol)
+	case diff.ChangeTypeModify:
+		coloredSymbol = yellow(symbol)
+	case diff.ChangeTypeMove:
+		coloredSymbol = cyan(symbol)
+	default:
+		coloredSymbol = symbol
+	}
+
+	b.WriteString(fmt.Sprintf("  %s %s", coloredSymbol, change.Path))
 
 	// Add values if requested
 	if opts.ShowValues {
 		switch change.Type {
 		case diff.ChangeTypeAdd:
 			val := formatValue(change.NewValue, opts.MaxValueLength)
-			b.WriteString(fmt.Sprintf(" = %s", val))
+			b.WriteString(fmt.Sprintf(" = %s", green(val)))
 
 		case diff.ChangeTypeRemove:
 			val := formatValue(change.OldValue, opts.MaxValueLength)
-			b.WriteString(fmt.Sprintf(" (was: %s)", val))
+			b.WriteString(fmt.Sprintf(" (was: %s)", red(val)))
 
 		case diff.ChangeTypeModify:
 			oldVal := formatValue(change.OldValue, opts.MaxValueLength)
 			newVal := formatValue(change.NewValue, opts.MaxValueLength)
-			b.WriteString(fmt.Sprintf(": %s → %s", oldVal, newVal))
+			b.WriteString(fmt.Sprintf(": %s → %s", red(oldVal), green(newVal)))
 		}
 	}
 

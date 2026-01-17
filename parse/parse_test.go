@@ -412,10 +412,10 @@ func TestParse(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name:    "HCL format not implemented",
+			name:    "HCL format",
 			data:    `key = "value"`,
 			format:  FormatHCL,
-			wantErr: true,
+			wantErr: false,
 		},
 		{
 			name:    "unsupported format",

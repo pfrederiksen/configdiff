@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/pfrederiksen/configdiff"
+	"github.com/pfrederiksen/configdiff/internal/config"
 )
 
 // CLIOptions holds all CLI flag values
@@ -71,6 +72,64 @@ func (c *CLIOptions) GetNewFormat() string {
 		return c.NewFormat
 	}
 	return c.Format
+}
+
+// ApplyConfigDefaults applies configuration file defaults to unset CLI options.
+// CLI flags always take precedence over config file values.
+func (c *CLIOptions) ApplyConfigDefaults(cfg *config.Config) {
+	// Merge ignore paths (config file + CLI)
+	if len(cfg.IgnorePaths) > 0 {
+		// Create a map to deduplicate
+		pathMap := make(map[string]bool)
+		for _, p := range cfg.IgnorePaths {
+			pathMap[p] = true
+		}
+		for _, p := range c.IgnorePaths {
+			pathMap[p] = true
+		}
+
+		// Convert back to slice
+		merged := make([]string, 0, len(pathMap))
+		for p := range pathMap {
+			merged = append(merged, p)
+		}
+		c.IgnorePaths = merged
+	}
+
+	// Merge array keys (config file + CLI)
+	if len(cfg.ArrayKeys) > 0 {
+		// Convert config map to CLI format (path=key)
+		for path, key := range cfg.ArrayKeys {
+			keySpec := fmt.Sprintf("%s=%s", path, key)
+			c.ArrayKeys = append(c.ArrayKeys, keySpec)
+		}
+	}
+
+	// Apply config defaults only if CLI flag wasn't set
+	// For bool flags, we need to check if they were explicitly set
+	// For now, we'll apply config if the CLI value is false (default)
+	if !c.NumericStrings && cfg.NumericStrings {
+		c.NumericStrings = cfg.NumericStrings
+	}
+	if !c.BoolStrings && cfg.BoolStrings {
+		c.BoolStrings = cfg.BoolStrings
+	}
+	if !c.StableOrder && cfg.StableOrder {
+		c.StableOrder = cfg.StableOrder
+	}
+	if !c.NoColor && cfg.NoColor {
+		c.NoColor = cfg.NoColor
+	}
+
+	// Apply string defaults if not set
+	if c.OutputFormat == "report" && cfg.OutputFormat != "" {
+		c.OutputFormat = cfg.OutputFormat
+	}
+
+	// Apply numeric defaults if not set
+	if c.MaxValueLength == 0 && cfg.MaxValueLength > 0 {
+		c.MaxValueLength = cfg.MaxValueLength
+	}
 }
 
 // Validate validates the CLI options

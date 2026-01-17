@@ -1,0 +1,13 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: myapp
+  generation: 1
+  creationTimestamp: "2024-01-01T00:00:00Z"
+spec:
+  replicas: 2
+  containers:
+    - name: web
+      image: nginx:1.19
+    - name: sidecar
+      image: helper:1.0

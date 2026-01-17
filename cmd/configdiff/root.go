@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 
+	"github.com/pfrederiksen/configdiff/internal/config"
 	"github.com/spf13/cobra"
 )
 
@@ -21,6 +22,9 @@ var (
 	maxValueLength int
 	quiet          bool
 	exitCode       bool
+
+	// Config file loaded at startup
+	cfg *config.Config
 )
 
 var rootCmd = &cobra.Command{
@@ -63,6 +67,9 @@ Use "-" for stdin input (only one file can be stdin).`,
 }
 
 func init() {
+	// Load config file (errors are ignored - config is optional)
+	cfg, _ = config.Load()
+
 	// Format flags
 	rootCmd.Flags().StringVarP(&format, "format", "f", "auto", "Input format (yaml, json, auto)")
 	rootCmd.Flags().StringVar(&oldFormat, "old-format", "", "Old file format override")

@@ -11,8 +11,10 @@ Semantic, human-grade diffs for YAML/JSON/HCL configuration files.
 - Ignore specific paths or treat arrays as sets
 - Handle type coercions (e.g., `"1"` vs `1`, `"true"` vs `true`)
 - Generate both machine-readable patches and human-friendly reports
+- Colorized output for better readability
+- Configuration file support for project defaults
 
-Perfect for GitOps reviews, CI checks, configuration drift detection, and any scenario where you need to understand what actually changed in your config files.
+Perfect for GitOps reviews, CI checks, configuration drift detection, Terraform/HCL comparisons, and any scenario where you need to understand what actually changed in your config files.
 
 ## Installation
 
@@ -22,8 +24,33 @@ Perfect for GitOps reviews, CI checks, configuration drift detection, and any sc
 # Homebrew (macOS/Linux)
 brew install pfrederiksen/tap/configdiff
 
+# Docker
+docker pull ghcr.io/pfrederiksen/configdiff:latest
+docker run --rm -v $(pwd):/work ghcr.io/pfrederiksen/configdiff:latest old.yaml new.yaml
+
 # Or download binaries from GitHub releases
 # https://github.com/pfrederiksen/configdiff/releases
+```
+
+### Shell Completion
+
+Enable shell completion for a better CLI experience:
+
+```bash
+# Bash
+source <(configdiff completion bash)
+# Or install permanently:
+configdiff completion bash > /etc/bash_completion.d/configdiff  # Linux
+configdiff completion bash > $(brew --prefix)/etc/bash_completion.d/configdiff  # macOS
+
+# Zsh
+configdiff completion zsh > "${fpath[1]}/_configdiff"
+
+# Fish
+configdiff completion fish > ~/.config/fish/completions/configdiff.fish
+
+# PowerShell
+configdiff completion powershell | Out-String | Invoke-Expression
 ```
 
 ### Go Library
@@ -113,7 +140,7 @@ env: production
 
 ```
 Format Options:
-  -f, --format string          Input format (yaml, json, auto) (default "auto")
+  -f, --format string          Input format (yaml, json, hcl, auto) (default "auto")
       --old-format string      Old file format override
       --new-format string      New file format override
 
@@ -134,14 +161,54 @@ Output Options:
 Other:
   -h, --help                   Help for configdiff
   -v, --version                Version information
+      completion [shell]       Generate shell completion scripts
 ```
 
 ### Output Formats
 
-- **report** (default): Detailed human-friendly report with values
+- **report** (default): Detailed human-friendly report with values, colorized for better readability
 - **compact**: Summary with paths only
 - **json**: JSON-serialized changes array
 - **patch**: JSON Patch (RFC 6902) format
+
+**Color Output**: The report format includes color-coded output by default:
+- Green for additions
+- Red for removals
+- Yellow for modifications
+- Cyan for moves
+
+Disable with `--no-color` or `NO_COLOR=1` environment variable.
+
+### Configuration File
+
+Create a `.configdiffrc` or `.configdiff.yaml` file in your project or home directory to set default options:
+
+```yaml
+# .configdiffrc
+ignore_paths:
+  - /metadata/generation
+  - /metadata/creationTimestamp
+  - /status/*
+
+array_keys:
+  /spec/containers: name
+  /spec/volumes: name
+
+numeric_strings: false
+bool_strings: false
+stable_order: true
+output_format: report
+max_value_length: 100
+no_color: false
+```
+
+**Configuration file locations** (checked in order):
+1. `./.configdiffrc` (current directory)
+2. `./.configdiff.yaml` (current directory)
+3. `~/.configdiffrc` (home directory)
+4. `~/.configdiff.yaml` (home directory)
+
+CLI flags always override configuration file settings. For arrays and maps (like `ignore_paths` and `array_keys`), CLI flags are merged with config file values.
 
 ### Exit Codes
 
@@ -320,7 +387,7 @@ result, _ := configdiff.DiffBytes(jsonConfig, "json", yamlConfig, "yaml", opts)
 
 ### Cross-Format Comparison
 
-Compare YAML and JSON representations:
+Compare YAML, JSON, and HCL representations:
 
 ```go
 yamlConfig := []byte(`
@@ -338,6 +405,78 @@ jsonConfig := []byte(`{
 
 result, _ := configdiff.DiffBytes(yamlConfig, "yaml", jsonConfig, "json", configdiff.Options{})
 // No differences - semantically identical
+```
+
+### HCL/Terraform Configuration
+
+Compare Terraform/HCL configuration files:
+
+```bash
+# Compare Terraform configs
+configdiff old.tf new.tf --format hcl
+
+# Compare Terraform variable files
+configdiff terraform.tfvars.old terraform.tfvars.new --format hcl
+
+# Mix formats (YAML to HCL)
+configdiff config.yaml config.hcl --old-format yaml --new-format hcl
+```
+
+Example HCL comparison:
+
+```go
+oldHCL := []byte(`
+region = "us-east-1"
+instance_type = "t3.micro"
+
+config = {
+  enabled = true
+  replicas = 2
+}
+
+servers = [
+  {
+    name = "web1"
+    ip = "10.0.1.1"
+  },
+  {
+    name = "web2"
+    ip = "10.0.1.2"
+  }
+]
+`)
+
+newHCL := []byte(`
+region = "us-west-2"
+instance_type = "t3.small"
+
+config = {
+  enabled = true
+  replicas = 3
+}
+
+servers = [
+  {
+    name = "web1"
+    ip = "10.0.1.1"
+  },
+  {
+    name = "web2"
+    ip = "10.0.1.2"
+  },
+  {
+    name = "web3"
+    ip = "10.0.1.3"
+  }
+]
+`)
+
+result, _ := configdiff.DiffBytes(oldHCL, "hcl", newHCL, "hcl", configdiff.Options{
+    ArraySetKeys: map[string]string{
+        "/servers": "name",
+    },
+})
+// Detects region change, instance_type change, replicas change, and new server
 ```
 
 ### Kubernetes Deployment Diff
@@ -502,6 +641,7 @@ type Options struct {
     Compact        bool  // If true, only show paths
     ShowValues     bool  // If true, include old/new values
     MaxValueLength int   // Truncate values longer than this (0 = no limit)
+    NoColor        bool  // If true, disable colored output
 }
 ```
 
@@ -538,6 +678,25 @@ configdiff desired-state.json actual.json \
   -o compact \
   --ignore /timestamps/* \
   --ignore /metadata/id
+```
+
+### Terraform Configuration Management
+
+```bash
+# Compare Terraform configurations
+configdiff main.tf.backup main.tf --format hcl
+
+# Compare tfvars files
+configdiff staging.tfvars production.tfvars --format hcl \
+  --array-key /security_groups=name
+
+# Review Terraform state changes
+terraform show -json > current-state.json
+git show HEAD:terraform/state.json > previous-state.json
+configdiff previous-state.json current-state.json \
+  --ignore /version \
+  --ignore /terraform_version \
+  --ignore /serial
 ```
 
 ### Configuration Management
@@ -620,19 +779,24 @@ go test ./report -update
 
 - [x] Repository setup with CI/CD
 - [x] Tree package with normalized representation
-- [x] YAML/JSON parsing with format detection
+- [x] YAML/JSON/HCL parsing with format detection
 - [x] Semantic diff engine with customizable rules
 - [x] JSON Patch-like operations
-- [x] Human-friendly report generation
-- [x] Comprehensive test coverage (84.8%)
+- [x] Human-friendly report generation with color output
+- [x] Full-featured CLI tool with shell completion
+- [x] Docker container support
+- [x] Configuration file support (.configdiffrc)
+- [x] Homebrew tap for easy installation
+- [x] Comprehensive test coverage (>80%)
 - [x] Full API documentation and examples
 
 ### Future Enhancements
 
-- HCL format support (experimental)
-- Additional coercion rules
-- Performance optimizations for very large configs
-- CLI tool for command-line usage
+- Additional coercion rules (e.g., unit conversions, date formats)
+- Performance optimizations for very large configs (>100MB)
+- TOML format support
+- Interactive diff mode
+- Diff statistics and analytics
 
 ## Contributing
 

@@ -5,7 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/hashicorp/hcl/v2/hclparse"
 	"github.com/pfrederiksen/configdiff/tree"
+	"github.com/zclconf/go-cty/cty"
+	"github.com/zclconf/go-cty/cty/gocty"
 	"gopkg.in/yaml.v3"
 )
 
@@ -31,7 +34,7 @@ func Parse(data []byte, format Format) (*tree.Node, error) {
 	case FormatJSON:
 		return ParseJSON(data)
 	case FormatHCL:
-		return nil, fmt.Errorf("HCL format not yet implemented")
+		return ParseHCL(data)
 	default:
 		return nil, fmt.Errorf("unsupported format: %s", format)
 	}
@@ -71,6 +74,105 @@ func ParseJSON(data []byte) (*tree.Node, error) {
 	// Set canonical paths
 	node.SetPaths("/")
 	return node, nil
+}
+
+// ParseHCL parses HCL data into a normalized tree.
+func ParseHCL(data []byte) (*tree.Node, error) {
+	parser := hclparse.NewParser()
+	file, diags := parser.ParseHCL(data, "config.hcl")
+	if diags.HasErrors() {
+		return nil, fmt.Errorf("failed to parse HCL: %s", diags.Error())
+	}
+
+	// Extract attributes into a map
+	attrs, diags := file.Body.JustAttributes()
+	if diags.HasErrors() {
+		return nil, fmt.Errorf("failed to extract HCL attributes: %s", diags.Error())
+	}
+
+	result := make(map[string]interface{})
+	for name, attr := range attrs {
+		val, diags := attr.Expr.Value(nil)
+		if diags.HasErrors() {
+			return nil, fmt.Errorf("failed to evaluate HCL attribute %q: %s", name, diags.Error())
+		}
+
+		goVal, err := ctyToGo(val)
+		if err != nil {
+			return nil, fmt.Errorf("failed to convert HCL value for %q: %w", name, err)
+		}
+		result[name] = goVal
+	}
+
+	node, err := valueToNode(result)
+	if err != nil {
+		return nil, err
+	}
+
+	// Set canonical paths
+	node.SetPaths("/")
+	return node, nil
+}
+
+// ctyToGo converts a cty.Value to a Go interface{} value
+func ctyToGo(val cty.Value) (interface{}, error) {
+	if val.IsNull() {
+		return nil, nil
+	}
+
+	typ := val.Type()
+	switch {
+	case typ == cty.Bool:
+		var result bool
+		if err := gocty.FromCtyValue(val, &result); err != nil {
+			return nil, err
+		}
+		return result, nil
+
+	case typ == cty.Number:
+		var result float64
+		if err := gocty.FromCtyValue(val, &result); err != nil {
+			return nil, err
+		}
+		return result, nil
+
+	case typ == cty.String:
+		var result string
+		if err := gocty.FromCtyValue(val, &result); err != nil {
+			return nil, err
+		}
+		return result, nil
+
+	case typ.IsListType() || typ.IsTupleType():
+		list := make([]interface{}, 0, val.LengthInt())
+		it := val.ElementIterator()
+		for it.Next() {
+			_, elem := it.Element()
+			goElem, err := ctyToGo(elem)
+			if err != nil {
+				return nil, err
+			}
+			list = append(list, goElem)
+		}
+		return list, nil
+
+	case typ.IsMapType() || typ.IsObjectType():
+		result := make(map[string]interface{})
+		it := val.ElementIterator()
+		for it.Next() {
+			key, elem := it.Element()
+			keyStr := key.AsString()
+			goElem, err := ctyToGo(elem)
+			if err != nil {
+				return nil, err
+			}
+			result[keyStr] = goElem
+		}
+		return result, nil
+
+	default:
+		return nil, fmt.Errorf("unsupported cty type: %s", typ.FriendlyName())
+	}
 }
 
 // normalizeYAMLValue converts YAML's map[interface{}]interface{} to map[string]interface{}

@@ -300,7 +300,8 @@ func TestFormatSummary(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := formatSummary(tt.summary)
+			opts := Options{NoColor: true} // Disable color in tests
+			got := formatSummary(tt.summary, opts)
 			if got != tt.want {
 				t.Errorf("formatSummary() = %q, want %q", got, tt.want)
 			}

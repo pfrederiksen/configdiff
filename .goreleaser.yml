@@ -113,3 +113,42 @@ brews:
       system "#{bin}/configdiff version"
     install: |
       bin.install "configdiff"
+
+dockers:
+  - image_templates:
+      - "ghcr.io/pfrederiksen/configdiff:{{ .Version }}-amd64"
+      - "ghcr.io/pfrederiksen/configdiff:latest-amd64"
+    use: buildx
+    build_flag_templates:
+      - "--platform=linux/amd64"
+      - "--label=org.opencontainers.image.created={{.Date}}"
+      - "--label=org.opencontainers.image.title={{.ProjectName}}"
+      - "--label=org.opencontainers.image.revision={{.FullCommit}}"
+      - "--label=org.opencontainers.image.version={{.Version}}"
+      - "--label=org.opencontainers.image.source=https://github.com/pfrederiksen/configdiff"
+    dockerfile: Dockerfile
+
+  - image_templates:
+      - "ghcr.io/pfrederiksen/configdiff:{{ .Version }}-arm64"
+      - "ghcr.io/pfrederiksen/configdiff:latest-arm64"
+    use: buildx
+    build_flag_templates:
+      - "--platform=linux/arm64"
+      - "--label=org.opencontainers.image.created={{.Date}}"
+      - "--label=org.opencontainers.image.title={{.ProjectName}}"
+      - "--label=org.opencontainers.image.revision={{.FullCommit}}"
+      - "--label=org.opencontainers.image.version={{.Version}}"
+      - "--label=org.opencontainers.image.source=https://github.com/pfrederiksen/configdiff"
+    goarch: arm64
+    dockerfile: Dockerfile
+
+docker_manifests:
+  - name_template: "ghcr.io/pfrederiksen/configdiff:{{ .Version }}"
+    image_templates:
+      - "ghcr.io/pfrederiksen/configdiff:{{ .Version }}-amd64"
+      - "ghcr.io/pfrederiksen/configdiff:{{ .Version }}-arm64"
+
+  - name_template: "ghcr.io/pfrederiksen/configdiff:latest"
+    image_templates:
+      - "ghcr.io/pfrederiksen/configdiff:latest-amd64"
+      - "ghcr.io/pfrederiksen/configdiff:latest-arm64"

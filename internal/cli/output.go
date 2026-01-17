@@ -24,11 +24,16 @@ func FormatOutput(result *configdiff.Result, opts OutputOptions) (string, error)
 			Compact:        false,
 			ShowValues:     true,
 			MaxValueLength: opts.MaxValueLength,
+			NoColor:        opts.NoColor,
 		}), nil
 
 	case "compact":
 		// Compact report (paths only)
-		return report.GenerateCompact(result.Changes), nil
+		return report.Generate(result.Changes, report.Options{
+			Compact:    true,
+			ShowValues: false,
+			NoColor:    opts.NoColor,
+		}), nil
 
 	case "json":
 		// JSON serialized changes

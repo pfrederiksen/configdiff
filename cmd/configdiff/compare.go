@@ -29,6 +29,11 @@ func compare(oldFile, newFile string) error {
 		ExitCode:       exitCode,
 	}
 
+	// Apply config file defaults (CLI flags take precedence)
+	if cfg != nil {
+		cliOpts.ApplyConfigDefaults(cfg)
+	}
+
 	// Validate options
 	if err := cliOpts.Validate(); err != nil {
 		return err
