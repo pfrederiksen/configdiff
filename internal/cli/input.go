@@ -67,6 +67,8 @@ func detectFormat(path string, data []byte) string {
 			return "json"
 		case ".hcl", ".tf":
 			return "hcl"
+		case ".toml":
+			return "toml"
 		}
 	}
 

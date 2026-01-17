@@ -22,6 +22,7 @@ var (
 	maxValueLength int
 	quiet          bool
 	exitCode       bool
+	recursive      bool
 
 	// Config file loaded at startup
 	cfg *config.Config
@@ -71,7 +72,7 @@ func init() {
 	cfg, _ = config.Load()
 
 	// Format flags
-	rootCmd.Flags().StringVarP(&format, "format", "f", "auto", "Input format (yaml, json, auto)")
+	rootCmd.Flags().StringVarP(&format, "format", "f", "auto", "Input format (yaml, json, hcl, toml, auto)")
 	rootCmd.Flags().StringVar(&oldFormat, "old-format", "", "Old file format override")
 	rootCmd.Flags().StringVar(&newFormat, "new-format", "", "New file format override")
 
@@ -83,11 +84,12 @@ func init() {
 	rootCmd.Flags().BoolVar(&stableOrder, "stable-order", true, "Sort output deterministically")
 
 	// Output flags
-	rootCmd.Flags().StringVarP(&outputFormat, "output", "o", "report", "Output format (report, compact, json, patch)")
+	rootCmd.Flags().StringVarP(&outputFormat, "output", "o", "report", "Output format (report, compact, json, patch, stat, side-by-side, git-diff)")
 	rootCmd.Flags().BoolVar(&noColor, "no-color", false, "Disable colored output")
 	rootCmd.Flags().IntVar(&maxValueLength, "max-value-length", 80, "Truncate values longer than N chars (0 = no limit)")
 	rootCmd.Flags().BoolVarP(&quiet, "quiet", "q", false, "Quiet mode (no output)")
 	rootCmd.Flags().BoolVar(&exitCode, "exit-code", false, "Exit with code 1 if differences found")
+	rootCmd.Flags().BoolVarP(&recursive, "recursive", "r", false, "Recursively compare directories")
 
 	// Add version command
 	rootCmd.AddCommand(versionCmd)

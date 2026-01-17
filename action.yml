@@ -1,0 +1,73 @@
+name: 'Config Diff'
+description: 'Semantic diff for YAML/JSON/HCL/TOML configuration files'
+author: 'Peter Frederiksen'
+
+branding:
+  icon: 'file-text'
+  color: 'blue'
+
+inputs:
+  old-file:
+    description: 'Path to old configuration file or directory'
+    required: true
+  new-file:
+    description: 'Path to new configuration file or directory'
+    required: true
+  format:
+    description: 'Input format (yaml, json, hcl, toml, auto)'
+    required: false
+    default: 'auto'
+  output-format:
+    description: 'Output format (report, compact, json, patch, stat, side-by-side, git-diff)'
+    required: false
+    default: 'report'
+  ignore-paths:
+    description: 'Comma-separated list of paths to ignore (e.g., /metadata/generation,/status/*)'
+    required: false
+    default: ''
+  array-keys:
+    description: 'Comma-separated list of array key specs (e.g., /spec/containers=name)'
+    required: false
+    default: ''
+  numeric-strings:
+    description: 'Coerce numeric strings to numbers'
+    required: false
+    default: 'false'
+  bool-strings:
+    description: 'Coerce bool strings to booleans'
+    required: false
+    default: 'false'
+  no-color:
+    description: 'Disable colored output'
+    required: false
+    default: 'false'
+  exit-code:
+    description: 'Exit with code 1 if differences found'
+    required: false
+    default: 'false'
+  recursive:
+    description: 'Recursively compare directories'
+    required: false
+    default: 'false'
+
+outputs:
+  has-changes:
+    description: 'Whether any changes were detected (true/false)'
+  diff-output:
+    description: 'The diff output'
+
+runs:
+  using: 'docker'
+  image: 'docker://ghcr.io/pfrederiksen/configdiff:latest'
+  args:
+    - ${{ inputs.old-file }}
+    - ${{ inputs.new-file }}
+    - --format=${{ inputs.format }}
+    - --output=${{ inputs.output-format }}
+    - ${{ inputs.ignore-paths != '' && format('--ignore={0}', inputs.ignore-paths) || '' }}
+    - ${{ inputs.array-keys != '' && format('--array-key={0}', inputs.array-keys) || '' }}
+    - ${{ inputs.numeric-strings == 'true' && '--numeric-strings' || '' }}
+    - ${{ inputs.bool-strings == 'true' && '--bool-strings' || '' }}
+    - ${{ inputs.no-color == 'true' && '--no-color' || '' }}
+    - ${{ inputs.exit-code == 'true' && '--exit-code' || '' }}
+    - ${{ inputs.recursive == 'true' && '--recursive' || '' }}
