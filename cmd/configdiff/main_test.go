@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -226,7 +227,7 @@ func TestCompareDirectories(t *testing.T) {
 	quiet = true // Suppress output during test
 	exitCode = false
 
-	err := compareDirectories(oldDir, newDir)
+	_, err := compareDirectories(oldDir, newDir)
 	if err != nil {
 		t.Errorf("compareDirectories() error = %v", err)
 	}
@@ -305,4 +306,112 @@ func findSubstring(s, substr string) bool {
 		}
 	}
 	return false
+}
+
+func TestCompareFilesReturnValue(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create files with no changes
+	sameFile1 := filepath.Join(tmpDir, "same1.yaml")
+	sameFile2 := filepath.Join(tmpDir, "same2.yaml")
+	if err := os.WriteFile(sameFile1, []byte("value: 1"), 0644); err != nil {
+		t.Fatalf("Failed to write file: %v", err)
+	}
+	if err := os.WriteFile(sameFile2, []byte("value: 1"), 0644); err != nil {
+		t.Fatalf("Failed to write file: %v", err)
+	}
+
+	// Create files with changes
+	diffFile1 := filepath.Join(tmpDir, "diff1.yaml")
+	diffFile2 := filepath.Join(tmpDir, "diff2.yaml")
+	if err := os.WriteFile(diffFile1, []byte("value: 1"), 0644); err != nil {
+		t.Fatalf("Failed to write file: %v", err)
+	}
+	if err := os.WriteFile(diffFile2, []byte("value: 2"), 0644); err != nil {
+		t.Fatalf("Failed to write file: %v", err)
+	}
+
+	tests := []struct {
+		name        string
+		oldFile     string
+		newFile     string
+		wantChanges bool
+		wantErr     bool
+	}{
+		{
+			name:        "no changes",
+			oldFile:     sameFile1,
+			newFile:     sameFile2,
+			wantChanges: false,
+			wantErr:     false,
+		},
+		{
+			name:        "with changes",
+			oldFile:     diffFile1,
+			newFile:     diffFile2,
+			wantChanges: true,
+			wantErr:     false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			quiet = true
+			exitCode = false
+
+			hasChanges, err := compareFiles(tt.oldFile, tt.newFile)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("compareFiles() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if hasChanges != tt.wantChanges {
+				t.Errorf("compareFiles() hasChanges = %v, want %v", hasChanges, tt.wantChanges)
+			}
+		})
+	}
+}
+
+func TestDirectoryComparisonDoesNotExitEarly(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	oldDir := filepath.Join(tmpDir, "old")
+	newDir := filepath.Join(tmpDir, "new")
+
+	if err := os.MkdirAll(oldDir, 0755); err != nil {
+		t.Fatalf("Failed to create old dir: %v", err)
+	}
+	if err := os.MkdirAll(newDir, 0755); err != nil {
+		t.Fatalf("Failed to create new dir: %v", err)
+	}
+
+	// Create multiple files with changes
+	// This tests that compareDirectories doesn't exit early when --exit-code is set
+	files := []string{"file1.yaml", "file2.yaml", "file3.yaml"}
+	for i, f := range files {
+		oldContent := fmt.Sprintf("value: %d", i)
+		newContent := fmt.Sprintf("value: %d", i+10)
+		if err := os.WriteFile(filepath.Join(oldDir, f), []byte(oldContent), 0644); err != nil {
+			t.Fatalf("Failed to write old file: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(newDir, f), []byte(newContent), 0644); err != nil {
+			t.Fatalf("Failed to write new file: %v", err)
+		}
+	}
+
+	// Run with quiet mode and exit-code flag
+	// The function should compare all files and return normally (not call os.Exit)
+	quiet = true
+	exitCode = true // This used to cause early exit, now it should work correctly
+
+	hasChanges, err := compareDirectories(oldDir, newDir)
+	if err != nil {
+		t.Errorf("compareDirectories() error = %v", err)
+	}
+
+	// Verify that changes were detected
+	if !hasChanges {
+		t.Error("compareDirectories() should have detected changes but didn't")
+	}
+
+	// If we get here, the function completed successfully without os.Exit
+	// The os.Exit would happen in the caller (compare function), not in compareDirectories
 }

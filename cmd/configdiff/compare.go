@@ -21,7 +21,17 @@ func compare(oldFile, newFile string) error {
 		if !recursive {
 			return fmt.Errorf("comparing directories requires --recursive flag")
 		}
-		return compareDirectories(oldFile, newFile)
+		hasChanges, err := compareDirectories(oldFile, newFile)
+		if err != nil {
+			return err
+		}
+
+		// Handle exit code mode for directory comparison
+		if exitCode && hasChanges {
+			os.Exit(1)
+		}
+
+		return nil
 	}
 
 	// One is a directory and one isn't
@@ -33,11 +43,22 @@ func compare(oldFile, newFile string) error {
 	}
 
 	// Both are files (or stdin), proceed with normal comparison
-	return compareFiles(oldFile, newFile)
+	hasChanges, err := compareFiles(oldFile, newFile)
+	if err != nil {
+		return err
+	}
+
+	// Handle exit code mode for single file comparison
+	if exitCode && hasChanges {
+		os.Exit(1)
+	}
+
+	return nil
 }
 
-// compareFiles performs the diff operation between two files
-func compareFiles(oldFile, newFile string) error {
+// compareFiles performs the diff operation between two files.
+// Returns true if changes were found, false otherwise.
+func compareFiles(oldFile, newFile string) (bool, error) {
 	// Build CLI options from flags
 	cliOpts := cli.CLIOptions{
 		OldFile:        oldFile,
@@ -64,25 +85,25 @@ func compareFiles(oldFile, newFile string) error {
 
 	// Validate options
 	if err := cliOpts.Validate(); err != nil {
-		return err
+		return false, err
 	}
 
 	// Read old file
 	oldInput, err := cli.ReadInput(oldFile, cliOpts.GetOldFormat())
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	// Read new file
 	newInput, err := cli.ReadInput(newFile, cliOpts.GetNewFormat())
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	// Convert CLI options to library options
 	diffOpts, err := cliOpts.ToLibraryOptions()
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	// Perform the diff
@@ -92,7 +113,7 @@ func compareFiles(oldFile, newFile string) error {
 		diffOpts,
 	)
 	if err != nil {
-		return fmt.Errorf("diff failed: %w", err)
+		return false, fmt.Errorf("diff failed: %w", err)
 	}
 
 	// Format and output results (unless quiet mode)
@@ -105,31 +126,28 @@ func compareFiles(oldFile, newFile string) error {
 			NewFile:        newFile,
 		})
 		if err != nil {
-			return err
+			return false, err
 		}
 
 		fmt.Println(output)
 	}
 
-	// Handle exit code mode
-	if exitCode && cli.HasChanges(result) {
-		os.Exit(1)
-	}
-
-	return nil
+	// Return whether changes were found
+	return cli.HasChanges(result), nil
 }
 
-// compareDirectories recursively compares two directories
-func compareDirectories(oldDir, newDir string) error {
+// compareDirectories recursively compares two directories.
+// Returns true if any changes were found, false otherwise.
+func compareDirectories(oldDir, newDir string) (bool, error) {
 	// Collect all config files from both directories
 	oldFiles, err := collectConfigFiles(oldDir)
 	if err != nil {
-		return fmt.Errorf("failed to scan old directory: %w", err)
+		return false, fmt.Errorf("failed to scan old directory: %w", err)
 	}
 
 	newFiles, err := collectConfigFiles(newDir)
 	if err != nil {
-		return fmt.Errorf("failed to scan new directory: %w", err)
+		return false, fmt.Errorf("failed to scan new directory: %w", err)
 	}
 
 	// Build set of all relative paths
@@ -163,7 +181,7 @@ func compareDirectories(oldDir, newDir string) error {
 				fmt.Printf("\n=== %s ===\n", relPath)
 			}
 
-			err := compareFiles(oldPath, newPath)
+			fileHasChanges, err := compareFiles(oldPath, newPath)
 			if err != nil {
 				if !quiet {
 					fmt.Printf("Error: %v\n", err)
@@ -171,6 +189,9 @@ func compareDirectories(oldDir, newDir string) error {
 				continue
 			}
 			filesCompared++
+			if fileHasChanges {
+				hasAnyChanges = true
+			}
 		} else if newExists && !oldExists {
 			// File added
 			filesAdded++
@@ -195,12 +216,8 @@ func compareDirectories(oldDir, newDir string) error {
 			filesCompared, filesAdded, filesRemoved)
 	}
 
-	// Handle exit code mode
-	if exitCode && hasAnyChanges {
-		os.Exit(1)
-	}
-
-	return nil
+	// Return whether any changes were found
+	return hasAnyChanges, nil
 }
 
 // collectConfigFiles recursively finds all config files in a directory
