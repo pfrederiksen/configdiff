@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/BurntSushi/toml"
 	"github.com/hashicorp/hcl/v2/hclparse"
 	"github.com/pfrederiksen/configdiff/tree"
 	"github.com/zclconf/go-cty/cty"
@@ -24,6 +25,9 @@ const (
 
 	// FormatHCL represents HCL format (experimental).
 	FormatHCL Format = "hcl"
+
+	// FormatTOML represents TOML format.
+	FormatTOML Format = "toml"
 )
 
 // Parse parses configuration data in the specified format into a normalized tree.
@@ -35,6 +39,8 @@ func Parse(data []byte, format Format) (*tree.Node, error) {
 		return ParseJSON(data)
 	case FormatHCL:
 		return ParseHCL(data)
+	case FormatTOML:
+		return ParseTOML(data)
 	default:
 		return nil, fmt.Errorf("unsupported format: %s", format)
 	}
@@ -64,6 +70,23 @@ func ParseJSON(data []byte) (*tree.Node, error) {
 	var v interface{}
 	if err := json.Unmarshal(data, &v); err != nil {
 		return nil, fmt.Errorf("failed to parse JSON: %w", err)
+	}
+
+	node, err := valueToNode(v)
+	if err != nil {
+		return nil, err
+	}
+
+	// Set canonical paths
+	node.SetPaths("/")
+	return node, nil
+}
+
+// ParseTOML parses TOML data into a normalized tree.
+func ParseTOML(data []byte) (*tree.Node, error) {
+	var v interface{}
+	if err := toml.Unmarshal(data, &v); err != nil {
+		return nil, fmt.Errorf("failed to parse TOML: %w", err)
 	}
 
 	node, err := valueToNode(v)
@@ -257,6 +280,18 @@ func valueToNode(v interface{}) (*tree.Node, error) {
 		}
 		return tree.NewArray(arr), nil
 
+	case []map[string]interface{}:
+		// TOML array of tables
+		arr := make([]*tree.Node, len(val))
+		for i, item := range val {
+			node, err := valueToNode(item)
+			if err != nil {
+				return nil, err
+			}
+			arr[i] = node
+		}
+		return tree.NewArray(arr), nil
+
 	default:
 		return nil, fmt.Errorf("unsupported value type: %T", v)
 	}
@@ -271,7 +306,13 @@ func DetectFormat(data []byte) (Format, error) {
 		return FormatJSON, nil
 	}
 
-	// Try YAML
+	// Try TOML
+	var tomlVal interface{}
+	if err := toml.Unmarshal(data, &tomlVal); err == nil {
+		return FormatTOML, nil
+	}
+
+	// Try YAML (most permissive)
 	var yamlVal interface{}
 	if err := yaml.Unmarshal(data, &yamlVal); err == nil {
 		return FormatYAML, nil

@@ -1,20 +1,24 @@
 # configdiff
 
-Semantic, human-grade diffs for YAML/JSON/HCL configuration files.
+Semantic, human-grade diffs for YAML/JSON/HCL/TOML configuration files.
 
 ## Overview
 
 `configdiff` provides intelligent semantic diffing for configuration files that goes beyond simple line-based comparison. It understands the structure of your configuration and can:
 
-- Normalize different formats (YAML, JSON, HCL) into a common representation
+- Normalize different formats (YAML, JSON, HCL, TOML) into a common representation
 - Apply customizable rules for semantic comparison
 - Ignore specific paths or treat arrays as sets
 - Handle type coercions (e.g., `"1"` vs `1`, `"true"` vs `true`)
 - Generate both machine-readable patches and human-friendly reports
+- Multiple output formats (report, compact, json, patch, stat, side-by-side, git-diff)
 - Colorized output for better readability
 - Configuration file support for project defaults
+- Directory comparison with `--recursive`
+- Git diff driver integration
+- GitHub Action for CI/CD workflows
 
-Perfect for GitOps reviews, CI checks, configuration drift detection, Terraform/HCL comparisons, and any scenario where you need to understand what actually changed in your config files.
+Perfect for GitOps reviews, CI checks, configuration drift detection, Terraform/HCL comparisons, Rust Cargo.toml files, Python pyproject.toml files, and any scenario where you need to understand what actually changed in your config files.
 
 ## Installation
 
@@ -71,15 +75,24 @@ configdiff old.yaml new.yaml
 kubectl get deploy myapp -o yaml | configdiff old.yaml -
 
 # Different output formats
-configdiff old.yaml new.yaml -o compact
-configdiff old.yaml new.yaml -o json
-configdiff old.yaml new.yaml -o patch
+configdiff old.yaml new.yaml -o compact      # Summary only
+configdiff old.yaml new.yaml -o json         # JSON array
+configdiff old.yaml new.yaml -o patch        # JSON Patch (RFC 6902)
+configdiff old.yaml new.yaml -o stat         # Git-style statistics
+configdiff old.yaml new.yaml -o side-by-side # Two-column comparison
+configdiff old.yaml new.yaml -o git-diff     # Git diff format
+
+# Compare directories recursively
+configdiff -r ./config-old ./config-new
 
 # Ignore specific paths
 configdiff old.yaml new.yaml -i /metadata/generation -i /status/*
 
 # Array-as-set comparison
 configdiff old.yaml new.yaml --array-key /spec/containers=name
+
+# TOML support (Cargo.toml, pyproject.toml, etc.)
+configdiff old.toml new.toml
 
 # Exit code mode for CI
 if configdiff old.yaml new.yaml --exit-code; then
@@ -140,7 +153,7 @@ env: production
 
 ```
 Format Options:
-  -f, --format string          Input format (yaml, json, hcl, auto) (default "auto")
+  -f, --format string          Input format (yaml, json, hcl, toml, auto) (default "auto")
       --old-format string      Old file format override
       --new-format string      New file format override
 
@@ -150,9 +163,10 @@ Diff Options:
       --numeric-strings        Coerce numeric strings to numbers
       --bool-strings           Coerce bool strings to booleans
       --stable-order           Sort output deterministically (default true)
+  -r, --recursive              Recursively compare directories
 
 Output Options:
-  -o, --output string          Output format (report, compact, json, patch) (default "report")
+  -o, --output string          Output format (report, compact, json, patch, stat, side-by-side, git-diff) (default "report")
       --no-color               Disable colored output
       --max-value-length int   Truncate values longer than N chars (default 80)
   -q, --quiet                  Quiet mode (no output)
@@ -170,8 +184,11 @@ Other:
 - **compact**: Summary with paths only
 - **json**: JSON-serialized changes array
 - **patch**: JSON Patch (RFC 6902) format
+- **stat**: Git-style statistics summary showing changes per path with visual bars
+- **side-by-side**: Two-column comparison view showing old and new values side by side
+- **git-diff**: Git diff format output, useful for git diff driver integration
 
-**Color Output**: The report format includes color-coded output by default:
+**Color Output**: The report, stat, and side-by-side formats include color-coded output by default:
 - Green for additions
 - Red for removals
 - Yellow for modifications
@@ -305,6 +322,103 @@ report.Generate(changes, report.Options{
     MaxValueLength: 50,  // Truncate long values
 })
 ```
+
+## Git Diff Driver Integration
+
+Configure git to automatically use `configdiff` for semantic diffs of configuration files.
+
+### Quick Setup
+
+1. Add to `~/.gitconfig`:
+```ini
+[diff "configdiff"]
+    command = configdiff --output git-diff
+```
+
+2. Add to `.gitattributes` in your repository:
+```gitattributes
+*.yaml diff=configdiff
+*.yml diff=configdiff
+*.json diff=configdiff
+*.toml diff=configdiff
+*.hcl diff=configdiff
+*.tf diff=configdiff
+```
+
+3. Now `git diff` will use configdiff automatically:
+```bash
+git diff config.yaml
+```
+
+See [docs/GIT_DIFF_DRIVER.md](docs/GIT_DIFF_DRIVER.md) for detailed setup and configuration options.
+
+## GitHub Action
+
+Use configdiff in GitHub Actions workflows for CI/CD integration.
+
+### Quick Start
+
+```yaml
+name: Config Diff
+on: [pull_request]
+
+jobs:
+  diff:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compare configs
+        uses: pfrederiksen/configdiff@v0.2.0
+        with:
+          old-file: config/production.yaml
+          new-file: config/staging.yaml
+```
+
+See [docs/GITHUB_ACTION.md](docs/GITHUB_ACTION.md) for full documentation and examples.
+
+## Directory Comparison
+
+Compare entire directories of configuration files recursively.
+
+### Usage
+
+```bash
+# Compare two directories
+configdiff -r ./config-old ./config-new
+
+# With output format
+configdiff -r ./config-old ./config-new -o stat
+
+# Ignore certain paths across all files
+configdiff -r ./config-old ./config-new -i /metadata/*
+```
+
+### Output
+
+```
+=== app.yaml ===
+Summary: ~2 modified (2 total)
+Changes:
+  ~ /replicas: 2 → 3
+  ~ /version: "1.0.0" → "2.0.0"
+
+=== database.toml ===
+Summary: ~1 modified (1 total)
+Changes:
+  ~ /database/host: "localhost" → "db.example.com"
+
++++ cache.json (added)
+
+Summary: 2 files compared, 1 added, 0 removed
+```
+
+The tool will:
+- Recursively scan both directories for config files (.yaml, .yml, .json, .hcl, .tf, .toml)
+- Match files by relative path
+- Report added files (only in new directory)
+- Report removed files (only in old directory)
+- Diff files that exist in both directories
 
 ## Examples
 

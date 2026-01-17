@@ -136,13 +136,16 @@ func (c *CLIOptions) ApplyConfigDefaults(cfg *config.Config) {
 func (c *CLIOptions) Validate() error {
 	// Validate output format
 	validFormats := map[string]bool{
-		"report":  true,
-		"compact": true,
-		"json":    true,
-		"patch":   true,
+		"report":       true,
+		"compact":      true,
+		"json":         true,
+		"patch":        true,
+		"stat":         true,
+		"side-by-side": true,
+		"git-diff":     true,
 	}
 	if !validFormats[c.OutputFormat] {
-		return fmt.Errorf("invalid output format %q, must be one of: report, compact, json, patch", c.OutputFormat)
+		return fmt.Errorf("invalid output format %q, must be one of: report, compact, json, patch, stat, side-by-side, git-diff", c.OutputFormat)
 	}
 
 	// Validate input format
@@ -151,15 +154,16 @@ func (c *CLIOptions) Validate() error {
 		"yaml": true,
 		"json": true,
 		"hcl":  true,
+		"toml": true,
 	}
 	if !validInputFormats[c.Format] {
-		return fmt.Errorf("invalid format %q, must be one of: auto, yaml, json, hcl", c.Format)
+		return fmt.Errorf("invalid format %q, must be one of: auto, yaml, json, hcl, toml", c.Format)
 	}
 	if c.OldFormat != "" && !validInputFormats[c.OldFormat] {
-		return fmt.Errorf("invalid old-format %q, must be one of: auto, yaml, json, hcl", c.OldFormat)
+		return fmt.Errorf("invalid old-format %q, must be one of: auto, yaml, json, hcl, toml", c.OldFormat)
 	}
 	if c.NewFormat != "" && !validInputFormats[c.NewFormat] {
-		return fmt.Errorf("invalid new-format %q, must be one of: auto, yaml, json, hcl", c.NewFormat)
+		return fmt.Errorf("invalid new-format %q, must be one of: auto, yaml, json, hcl, toml", c.NewFormat)
 	}
 
 	return nil

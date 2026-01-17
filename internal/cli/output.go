@@ -13,6 +13,8 @@ type OutputOptions struct {
 	Format         string
 	NoColor        bool
 	MaxValueLength int
+	OldFile        string // For git-diff format
+	NewFile        string // For git-diff format
 }
 
 // FormatOutput formats the diff result according to the specified options
@@ -50,6 +52,21 @@ func FormatOutput(result *configdiff.Result, opts OutputOptions) (string, error)
 			return "", fmt.Errorf("failed to marshal patch to JSON: %w", err)
 		}
 		return string(data), nil
+
+	case "stat":
+		// Statistics summary
+		return report.GenerateStat(result.Changes), nil
+
+	case "side-by-side":
+		// Side-by-side comparison
+		return report.GenerateSideBySide(result.Changes, report.Options{
+			NoColor:        opts.NoColor,
+			MaxValueLength: opts.MaxValueLength,
+		}), nil
+
+	case "git-diff":
+		// Git diff format
+		return report.GenerateGitDiff(result.Changes, opts.OldFile, opts.NewFile), nil
 
 	default:
 		return "", fmt.Errorf("unsupported output format: %s", opts.Format)

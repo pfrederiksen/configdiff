@@ -924,3 +924,200 @@ func TestParseHCL_Integration(t *testing.T) {
 		})
 	}
 }
+
+func TestParseTOML(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		wantErr bool
+		check   func(*testing.T, *tree.Node)
+	}{
+		{
+			name:    "simple key-value",
+			input:   `name = "test"`,
+			wantErr: false,
+			check: func(t *testing.T, n *tree.Node) {
+				if n.Kind != tree.KindObject {
+					t.Fatalf("Kind = %v, want object", n.Kind)
+				}
+				name, ok := n.Object["name"]
+				if !ok {
+					t.Fatal("Expected 'name' key not found")
+				}
+				if name.Kind != tree.KindString || name.Value != "test" {
+					t.Errorf("name = %v, want string 'test'", name.Value)
+				}
+			},
+		},
+		{
+			name:    "integer",
+			input:   `port = 5432`,
+			wantErr: false,
+			check: func(t *testing.T, n *tree.Node) {
+				port, ok := n.Object["port"]
+				if !ok {
+					t.Fatal("Expected 'port' key not found")
+				}
+				if port.Kind != tree.KindNumber || port.Value != float64(5432) {
+					t.Errorf("port = %v, want number 5432", port.Value)
+				}
+			},
+		},
+		{
+			name:    "boolean",
+			input:   `enabled = true`,
+			wantErr: false,
+			check: func(t *testing.T, n *tree.Node) {
+				enabled, ok := n.Object["enabled"]
+				if !ok {
+					t.Fatal("Expected 'enabled' key not found")
+				}
+				if enabled.Kind != tree.KindBool || enabled.Value != true {
+					t.Errorf("enabled = %v, want bool true", enabled.Value)
+				}
+			},
+		},
+		{
+			name: "table (section)",
+			input: `[database]
+host = "localhost"
+port = 5432`,
+			wantErr: false,
+			check: func(t *testing.T, n *tree.Node) {
+				db, ok := n.Object["database"]
+				if !ok {
+					t.Fatal("Expected 'database' table not found")
+				}
+				if db.Kind != tree.KindObject {
+					t.Fatalf("database Kind = %v, want object", db.Kind)
+				}
+				host, ok := db.Object["host"]
+				if !ok || host.Value != "localhost" {
+					t.Errorf("database.host = %v, want 'localhost'", host)
+				}
+			},
+		},
+		{
+			name: "array",
+			input: `names = ["alice", "bob", "charlie"]`,
+			wantErr: false,
+			check: func(t *testing.T, n *tree.Node) {
+				names, ok := n.Object["names"]
+				if !ok {
+					t.Fatal("Expected 'names' key not found")
+				}
+				if names.Kind != tree.KindArray {
+					t.Fatalf("names Kind = %v, want array", names.Kind)
+				}
+				if len(names.Array) != 3 {
+					t.Errorf("len(names) = %d, want 3", len(names.Array))
+				}
+			},
+		},
+		{
+			name: "array of tables",
+			input: `[[bin]]
+name = "server"
+path = "src/main.rs"
+
+[[bin]]
+name = "client"
+path = "src/client.rs"`,
+			wantErr: false,
+			check: func(t *testing.T, n *tree.Node) {
+				bin, ok := n.Object["bin"]
+				if !ok {
+					t.Fatal("Expected 'bin' array not found")
+				}
+				if bin.Kind != tree.KindArray {
+					t.Fatalf("bin Kind = %v, want array", bin.Kind)
+				}
+				if len(bin.Array) != 2 {
+					t.Errorf("len(bin) = %d, want 2", len(bin.Array))
+				}
+				// Check first bin entry
+				if bin.Array[0].Kind != tree.KindObject {
+					t.Fatal("bin[0] should be object")
+				}
+				name, ok := bin.Array[0].Object["name"]
+				if !ok || name.Value != "server" {
+					t.Errorf("bin[0].name = %v, want 'server'", name)
+				}
+			},
+		},
+		{
+			name: "nested tables",
+			input: `[package]
+name = "myapp"
+version = "1.0.0"
+
+[package.metadata]
+description = "A test app"`,
+			wantErr: false,
+			check: func(t *testing.T, n *tree.Node) {
+				pkg, ok := n.Object["package"]
+				if !ok {
+					t.Fatal("Expected 'package' table not found")
+				}
+				metadata, ok := pkg.Object["metadata"]
+				if !ok {
+					t.Fatal("Expected 'package.metadata' table not found")
+				}
+				desc, ok := metadata.Object["description"]
+				if !ok || desc.Value != "A test app" {
+					t.Errorf("package.metadata.description = %v, want 'A test app'", desc)
+				}
+			},
+		},
+		{
+			name: "Cargo.toml-like structure",
+			input: `[package]
+name = "my-project"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+serde = "1.0"
+tokio = { version = "1.0", features = ["full"] }`,
+			wantErr: false,
+			check: func(t *testing.T, n *tree.Node) {
+				pkg, ok := n.Object["package"]
+				if !ok {
+					t.Fatal("Expected 'package' table not found")
+				}
+				name, ok := pkg.Object["name"]
+				if !ok || name.Value != "my-project" {
+					t.Errorf("package.name = %v, want 'my-project'", name)
+				}
+
+				deps, ok := n.Object["dependencies"]
+				if !ok {
+					t.Fatal("Expected 'dependencies' table not found")
+				}
+				serde, ok := deps.Object["serde"]
+				if !ok {
+					t.Fatal("Expected 'dependencies.serde' not found")
+				}
+				if serde.Kind != tree.KindString || serde.Value != "1.0" {
+					t.Errorf("dependencies.serde = %v, want string '1.0'", serde.Value)
+				}
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			node, err := ParseTOML([]byte(tt.input))
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("ParseTOML() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if err != nil {
+				return
+			}
+
+			if tt.check != nil {
+				tt.check(t, node)
+			}
+		})
+	}
+}

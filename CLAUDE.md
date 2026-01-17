@@ -17,10 +17,14 @@ Claude Code was used to build this project following production-quality standard
 The codebase is organized into focused packages:
 
 - `tree/` - Normalized tree representation for all config formats
-- `parse/` - Format-specific parsers (YAML, JSON, HCL)
+- `parse/` - Format-specific parsers (YAML, JSON, HCL, TOML)
 - `diff/` - Diff engine with customizable semantic rules
 - `patch/` - Machine-readable patch format
-- `report/` - Human-friendly pretty output
+- `report/` - Human-friendly output with multiple formats (report, compact, stat, side-by-side, git-diff)
+- `cmd/configdiff/` - CLI tool with full-featured command-line interface
+- `internal/cli/` - CLI-specific logic (input handling, output formatting, options)
+- `internal/config/` - Configuration file support
+- `docs/` - Additional documentation (git diff driver, GitHub Action guides)
 
 ## Development Workflow
 
@@ -39,15 +43,32 @@ Claude assisted with:
 - Project architecture and API design
 - Implementation of core algorithms (tree normalization, diff engine)
 - Test strategy and comprehensive test suites
-- CI/CD pipeline configuration
+- CI/CD pipeline configuration (GitHub Actions, GoReleaser, Docker)
 - Documentation and examples
+- CLI tool development with full feature set
+- Multiple parser implementations (YAML, JSON, HCL, TOML)
+- Various output formats (report, compact, stat, side-by-side, git-diff)
+- Git diff driver integration
+- GitHub Action for CI/CD workflows
+- Directory comparison feature
+- Shell completion support (Bash, Zsh, Fish, PowerShell)
+
+Recent enhancements (v0.3.0 development):
+
+- **TOML Support**: Added parser for Rust (Cargo.toml), Python (pyproject.toml) configuration files
+- **Diff Statistics**: Git-style `--stat` output showing changes per path with visual bars
+- **Side-by-Side View**: Two-column comparison format familiar from traditional diff tools
+- **Git Diff Driver**: Integration with git for automatic semantic diffs on config files
+- **Directory Comparison**: Recursive directory diffing with `--recursive` flag
+- **GitHub Action**: Published action for easy CI/CD integration
 
 Human oversight ensured:
 
-- Requirements alignment
-- Architectural decisions
+- Requirements alignment and feature prioritization
+- Architectural decisions and trade-offs
 - Code review and quality standards
-- Production readiness
+- Production readiness and release management
+- User experience and documentation clarity
 
 ## Transparency
 
